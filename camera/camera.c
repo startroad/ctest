@@ -74,7 +74,7 @@ int camera_get_fmt(int fd)
         __u32                   flags;          /* format flags (V4L2_PIX_FMT_FLAG_*) */
 
 #endif
-	printf("\tpixelformat:%x,%c%c%c%c\tfield:%x\tbytesperlinet:%x\tsizeimage:%d\tcolorspace:%x\tpriv:%x\tflags:%x\n",
+	printf("\tpixelformat:%x,%c%c%c%c\tfield:%x\tbytesperlinet:%u\tsizeimage:%d\tcolorspace:%x\tpriv:%x\tflags:%x\n",
 			fmt.fmt.pix.pixelformat,
 			fmt.fmt.pix.pixelformat&0xff, (fmt.fmt.pix.pixelformat>>8)&0xff, (fmt.fmt.pix.pixelformat>>16)&0xff, (fmt.fmt.pix.pixelformat>>24)&0xff,
 			fmt.fmt.pix.field,
@@ -91,12 +91,22 @@ int camera_set_fmt(int fd, int w, int h, char *format)
 {
 	struct v4l2_format fmt;
 
+	memset(&fmt, 0, sizeof(fmt));
         fmt.type=V4L2_BUF_TYPE_VIDEO_CAPTURE;
         ioctl(fd,VIDIOC_G_FMT,&fmt);
 
 	fmt.fmt.pix.width = w;
 	fmt.fmt.pix.height = h;
+	//fmt.fmt.pix.field = V4L2_FIELD_ANY;
+	//fmt.fmt.pix.colorspace = V4L2_COLORSPACE_JPEG;
 	fmt.fmt.pix.pixelformat = v4l2_fourcc(format[0], format[1], format[2], format[3]);
+
+	// int min = fmt.fmt.pix.width * 2;
+	// if (fmt.fmt.pix.bytesperline < min)
+	// 	fmt.fmt.pix.bytesperline = min;
+	// min = fmt.fmt.pix.bytesperline * fmt.fmt.pix.height;
+	// if (fmt.fmt.pix.sizeimage < min)
+	// 	fmt.fmt.pix.sizeimage = min;
 
 	printf("will set pixelformat:%x,%c%c%c%c.",
 			fmt.fmt.pix.pixelformat,fmt.fmt.pix.pixelformat&0xff, (fmt.fmt.pix.pixelformat>>8)&0xff, (fmt.fmt.pix.pixelformat>>16)&0xff, (fmt.fmt.pix.pixelformat>>24)&0xff);
@@ -212,15 +222,39 @@ int camera_cap(int fd)
 	
 	for(i=0; i<5; i++)
 	{
-		ioctl (fd,VIDIOC_DQBUF, &buf);
-		switch (errno) 
-		{			
-			case EAGAIN:				
-				continue; 		
-		}
+		while(1) 
+		{
+			fd_set fds;
+			struct timeval tv;
+			int r;
 
-		process_image(buffers[buf.index].start, buffers[buf.index].length);
-		ioctl (fd, VIDIOC_QBUF,&buf);
+			FD_ZERO (&fds);
+			FD_SET (fd, &fds);
+
+			/* Timeout. */
+			tv.tv_sec = 1;
+			tv.tv_usec = 0;
+
+			r = select (fd + 1, &fds, NULL, NULL, &tv);
+
+			if (-1 == r) 
+			{
+				if (EINTR == errno)
+					continue;
+
+				perror("select1:");
+			}
+
+			if (0 == r) {
+					perror("select2:");
+					break;
+			}
+
+			ioctl (fd,VIDIOC_DQBUF, &buf);
+			process_image(buffers[buf.index].start, buffers[buf.index].length);
+			ioctl (fd, VIDIOC_QBUF,&buf);
+			break;
+		}
 	}
 
 
