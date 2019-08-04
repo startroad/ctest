@@ -87,7 +87,7 @@ int camera_get_fmt(int fd)
 	return 0;
 }
 
-int camera_set_fmt(int fd, int w, int h, char *format)
+int camera_set_fmt(int fd, int w, int h, char *format, int fps)
 {
 	struct v4l2_format fmt;
 
@@ -122,14 +122,15 @@ int camera_set_fmt(int fd, int w, int h, char *format)
 			
 			parm.type									= V4L2_BUF_TYPE_VIDEO_CAPTURE;
 			parm.parm.capture.timeperframe.numerator	= 1;
-			parm.parm.capture.timeperframe.denominator	= 10;
+			parm.parm.capture.timeperframe.denominator	= fps;
 			
 			int ret = ioctl(fd, VIDIOC_S_PARM, &parm);
 			if (ret < 0)
 			{
-				printf("fail to call ioctl VIDIOC_S_PARM [%s]", strerror(errno));
+				printf("fail to call ioctl VIDIOC_S_PARM [%s],fps:%d\n", strerror(errno), fps);
 				return -1;
-			}
+			}else
+				printf("success call ioctl VIDIOC_S_PARM,fps:%d\n", fps);
 			
 		
 
@@ -238,7 +239,7 @@ int camera_cap(int fd)
 	buf.type =V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	buf.memory =V4L2_MEMORY_MMAP;
 	
-	for(i=0; i<5; i++)
+	for(i=0; i<50; i++)
 	{
 		while(1) 
 		{
@@ -386,7 +387,7 @@ int test_camera(struct camera_args *args)
 
 	camera_querysize(fd,args->priv_format);
 	camera_enum_fmt(fd);
-		camera_set_fmt(fd,args->priv_w,args->priv_h,args->priv_format);
+	camera_set_fmt(fd,args->priv_w,args->priv_h,args->priv_format,args->priv_fps);
 	camera_get_fmt(fd);
 	//camera_crop(fd);
 	camera_cap(fd);

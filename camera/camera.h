@@ -6,6 +6,7 @@ struct camera_args
         int camera_node_id;
         int priv_w;
         int priv_h;
+        int priv_fps;
         char priv_format[5];
 };
 
