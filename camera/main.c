@@ -4,6 +4,7 @@
 //#include <unistd.h>
 #include <getopt.h>
 #include <string.h>
+#include "menu.h"
 
 
 static const char short_options[] = "d:w:h:f:"; 
@@ -58,6 +59,8 @@ int main(int argc, char **argv)
 	int ret;
 	int camera_node_id=0;
 	struct camera_args args;
+
+	show_menu();
 
 	memset(&args, 0, sizeof(struct camera_args));
 	args.priv_w=1280;
