@@ -87,7 +87,7 @@ int camera_get_fmt(int fd)
 	return 0;
 }
 
-int camera_set_fmt(int fd, int w, int h, char *format)
+int camera_set_fmt(int fd, int w, int h, char *format, int fps)
 {
 	struct v4l2_format fmt;
 
@@ -116,6 +116,25 @@ int camera_set_fmt(int fd, int w, int h, char *format)
 		printf("try set fmt error\n");
 	}else
 		printf("try set fmt success\n");
+
+			{
+			struct v4l2_streamparm parm;
+			
+			parm.type									= V4L2_BUF_TYPE_VIDEO_CAPTURE;
+			parm.parm.capture.timeperframe.numerator	= 1;
+			parm.parm.capture.timeperframe.denominator	= fps;
+			
+			int ret = ioctl(fd, VIDIOC_S_PARM, &parm);
+			if (ret < 0)
+			{
+				printf("fail to call ioctl VIDIOC_S_PARM [%s],fps:%d\n", strerror(errno), fps);
+				return -1;
+			}else
+				printf("success call ioctl VIDIOC_S_PARM,fps:%d\n", fps);
+			
+		
+
+			}
 
 	return 0;
 }
@@ -220,7 +239,7 @@ int camera_cap(int fd)
 	buf.type =V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	buf.memory =V4L2_MEMORY_MMAP;
 	
-	for(i=0; i<5; i++)
+	for(i=0; i<50; i++)
 	{
 		while(1) 
 		{
@@ -268,6 +287,79 @@ int camera_cap(int fd)
 	free(buffers);
 }
 
+void camera_querysize(int fd, char *format)
+{	
+	struct v4l2_frmsizeenum fsize;
+	fsize.index         = 0;
+	fsize.pixel_format  = v4l2_fourcc(format[0], format[1], format[2], format[3]);
+
+	while(0 == ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &fsize))
+	{
+		fsize.index++;
+		if(fsize.type == V4L2_FRMSIZE_TYPE_DISCRETE){
+			printf("support DISCRETE preview size : %dx%d\n",fsize.discrete.width,fsize.discrete.height);
+
+		}else if(fsize.type == V4L2_FRMSIZE_TYPE_STEPWISE){
+			int fz_w_step;
+			int fz_h_step;
+			for(fz_w_step=fsize.stepwise.min_width;fz_w_step<=fsize.stepwise.max_width;fz_w_step+=fsize.stepwise.step_width)
+				for(fz_h_step=fsize.stepwise.min_height;fz_h_step<=fsize.stepwise.max_height;fz_h_step+=fsize.stepwise.step_height)
+				{   
+					printf("support preview STEPWISE size : %dx%d\n",fz_w_step,fz_h_step);
+				}
+
+		}
+
+		{
+			struct v4l2_fmtdesc fmt;
+
+			memset(&fmt, 0, sizeof(fmt));
+			fmt.index = 0;
+			fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+			struct v4l2_frmivalenum frmival;
+			memset(&frmival, 0x00, sizeof(frmival));
+
+			frmival.index           = 0;
+			frmival.pixel_format    = v4l2_fourcc(format[0], format[1], format[2], format[3]);
+			frmival.width           = fsize.discrete.width;
+			frmival.height          = fsize.discrete.height;
+
+			ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frmival);
+			if (frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+				printf("fps is ");
+				while(0 == ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frmival))
+				{
+					frmival.index++;
+					printf("%d ",(int)frmival.discrete.denominator/frmival.discrete.numerator);
+
+				}
+				printf("\n");
+			}
+
+			float stepval = 0;
+			if (frmival.type == V4L2_FRMIVAL_TYPE_CONTINUOUS) {
+				stepval = 1;
+			}
+			if (frmival.type == V4L2_FRMIVAL_TYPE_STEPWISE || frmival.type == V4L2_FRMIVAL_TYPE_CONTINUOUS){
+				frmival.index++;
+				float minval = (float)(frmival.stepwise.min.numerator)/frmival.stepwise.min.denominator;
+				float maxval = (float)(frmival.stepwise.max.numerator)/frmival.stepwise.max.denominator;
+				if (stepval == 0) {
+					stepval = (float)(frmival.stepwise.step.numerator)/frmival.stepwise.step.denominator;
+				}
+				for (float cval = minval; cval <= maxval; cval += stepval) {
+					printf("fps is %d \n",(int)(1/cval));
+				}
+
+			}
+
+
+		}
+
+	}
+}
+
 int test_camera(struct camera_args *args)
 {
 	int fd;
@@ -293,8 +385,9 @@ int test_camera(struct camera_args *args)
 	}else
 		printf("The video node not support capture\n");
 
+	camera_querysize(fd,args->priv_format);
 	camera_enum_fmt(fd);
-	camera_set_fmt(fd,args->priv_w,args->priv_h,args->priv_format);
+	camera_set_fmt(fd,args->priv_w,args->priv_h,args->priv_format,args->priv_fps);
 	camera_get_fmt(fd);
 	//camera_crop(fd);
 	camera_cap(fd);

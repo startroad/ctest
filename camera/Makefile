@@ -1,4 +1,4 @@
-main:main.o camera.o 
+main:main.o camera.o menu.o 
 	gcc -o $@ $^
 .c.o:
 	gcc -c $<
