@@ -8,6 +8,7 @@ struct camera_args
         int priv_h;
         int priv_fps;
         char priv_format[5];
+        char priv_save_file;
 };
 
 

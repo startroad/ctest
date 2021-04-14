@@ -7,7 +7,7 @@
 #include "menu.h"
 
 
-static const char short_options[] = "d:w:h:f:"; 
+static const char short_options[] = "d:w:h:f:s"; 
 
 static const struct option long_options[] = { 
 	{ "device", required_argument,		NULL, 'd' },
@@ -15,6 +15,7 @@ static const struct option long_options[] = {
 	{ "height", required_argument, NULL, 'h' }, 
 	{ "format", required_argument, NULL, 'f' }, 
 	{ "fps", required_argument, NULL, 'p' }, 
+	{ "savefile", no_argument, NULL, 's' }, 
 	{ 0, 0, 0, 0 } 
 };
 
@@ -49,6 +50,9 @@ int parse_argv(int argc, char **argv, struct camera_args *args)
 			case 'f':
 				strcpy(args->priv_format, optarg);
 				break;
+			case 's':
+				args->priv_save_file = 1;
+				break;
 		//	default:			
 				//usage(stderr, argc, argv);				
 		}	
@@ -69,7 +73,7 @@ int main(int argc, char **argv)
 	memset(&args, 0, sizeof(struct camera_args));
 	args.priv_w=1280;
 	args.priv_h = 720;
-	args.priv_h = 30;
+	args.priv_fps = 30;
 	strcpy(args.priv_format, "MJPG");
 
 

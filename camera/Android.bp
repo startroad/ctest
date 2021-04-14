@@ -1,0 +1,5 @@
+cc_binary {
+    name: "ct",
+    srcs: ["main.c", "camera.c", "menu.c"],
+    cflags: ["-Werror"],
+}

@@ -3,12 +3,12 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <stropts.h>
 #include <unistd.h>
 #include <linux/videodev2.h>
 #include <sys/mman.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 struct buffer {
 
@@ -166,13 +166,36 @@ int camera_crop(int fd)
 	return 0;
 }
 
-void process_image(void *buf, int len)
+void process_image(void *buf, int len, char is_save, char *format)
 {
-	FILE *fp;
 	static int id=0;
-	char name[10];
+    static long sec = 0;
+    static int count = 0;
+    count++;
+    id++;
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+	printf("(%03ld.%03ld)[%03d]:len:%d\n", tv.tv_sec%1000, tv.tv_usec/1000, id, len);
 
-	sprintf(name, "test%d.jpg", id++);
+    if(tv.tv_sec != sec)
+    {
+        if(sec != 0)
+        {
+            printf("fps:%d\n", count);
+        }
+        sec = tv.tv_sec;
+        count = 0;
+    }
+
+    if(!is_save)
+    {
+        return;
+    }
+
+	FILE *fp;
+	char name[64];
+
+	sprintf(name, "test%d.%s", id, format);
 
 	fp = fopen(name, "wb");
 	if(fp)
@@ -181,10 +204,9 @@ void process_image(void *buf, int len)
 		fclose(fp);
 	}
 
-	printf("cap:%lu,%d\n", (long)buf,len);
 }
 
-int camera_cap(int fd)
+int camera_cap(int fd, char is_save, char *format)
 {
 	struct v4l2_requestbuffers req;
 	struct buffer * buffers = NULL;
@@ -204,7 +226,7 @@ int camera_cap(int fd)
 	if(buffers==NULL)
 		return -1;
 
-	for (n_buffers = 0; n_buffers < req.count; ++n_buffers) 
+	for (n_buffers = 0; n_buffers < (int)req.count; ++n_buffers) 
 	{
 		memset(&buf, 0, sizeof(buf));		
 		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;		
@@ -222,7 +244,7 @@ int camera_cap(int fd)
 			return -1;
 	}
 
-	for (n_buffers = 0; n_buffers< req.count; ++n_buffers)
+	for (n_buffers = 0; n_buffers< (int)req.count; ++n_buffers)
 	{
 		struct v4l2_buffer buf;
 		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -239,7 +261,7 @@ int camera_cap(int fd)
 	buf.type =V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	buf.memory =V4L2_MEMORY_MMAP;
 	
-	for(i=0; i<50; i++)
+	for(i=0; i<330000; i++)
 	{
 		while(1) 
 		{
@@ -270,7 +292,7 @@ int camera_cap(int fd)
 			}
 
 			ioctl (fd,VIDIOC_DQBUF, &buf);
-			process_image(buffers[buf.index].start, buffers[buf.index].length);
+			process_image(buffers[buf.index].start, buf.bytesused, is_save, format);
 			ioctl (fd, VIDIOC_QBUF,&buf);
 			break;
 		}
@@ -278,13 +300,14 @@ int camera_cap(int fd)
 
 
 //uninit
-	for (n_buffers = 0; n_buffers < req.count; ++n_buffers)
+	for (n_buffers = 0; n_buffers < (int)req.count; ++n_buffers)
 	{
 		if (-1 == munmap(buffers[n_buffers].start, buffers[n_buffers].length))
 			perror("munmap");
 	}
 
 	free(buffers);
+    return 0;
 }
 
 void camera_querysize(int fd, char *format)
@@ -302,8 +325,8 @@ void camera_querysize(int fd, char *format)
 		}else if(fsize.type == V4L2_FRMSIZE_TYPE_STEPWISE){
 			int fz_w_step;
 			int fz_h_step;
-			for(fz_w_step=fsize.stepwise.min_width;fz_w_step<=fsize.stepwise.max_width;fz_w_step+=fsize.stepwise.step_width)
-				for(fz_h_step=fsize.stepwise.min_height;fz_h_step<=fsize.stepwise.max_height;fz_h_step+=fsize.stepwise.step_height)
+			for(fz_w_step=fsize.stepwise.min_width;fz_w_step<=(int)fsize.stepwise.max_width;fz_w_step+=fsize.stepwise.step_width)
+				for(fz_h_step=fsize.stepwise.min_height;fz_h_step<=(int)fsize.stepwise.max_height;fz_h_step+=fsize.stepwise.step_height)
 				{   
 					printf("support preview STEPWISE size : %dx%d\n",fz_w_step,fz_h_step);
 				}
@@ -390,7 +413,7 @@ int test_camera(struct camera_args *args)
 	camera_set_fmt(fd,args->priv_w,args->priv_h,args->priv_format,args->priv_fps);
 	camera_get_fmt(fd);
 	//camera_crop(fd);
-	camera_cap(fd);
+	camera_cap(fd, args->priv_save_file,args->priv_format);
 
 	close(fd);
 
